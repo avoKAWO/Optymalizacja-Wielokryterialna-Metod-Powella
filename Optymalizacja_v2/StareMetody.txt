@@ -1,0 +1,136 @@
+double problem_jednokryterialny(double x1, double x2, double w, int a)
+{
+	double result = (w * f1(x1, x2, a)) + ((1 - w) * f2(x1, x2, a));
+	return result;
+}
+double f_testowa(double w, std::vector<double> x, double c)
+{
+    function_call_count++;
+    return pow(x[0]+150, 2) + pow(x[1]+150, 2);
+}
+double zloty_podzial(std::function<double(double)> f, double a, double b, double epsilon) {
+    const double phi = (1 + std::sqrt(5)) / 2;
+    double c = b - (b - a) / phi;
+    double d = a + (b - a) / phi;
+
+    while (std::abs(b - a) > epsilon) {
+        if (f(c) < f(d)) {
+            b = d;
+        }
+        else {
+            a = c;
+        }
+        c = b - (b - a) / phi;
+        d = a + (b - a) / phi;
+    }
+    return (a + b) / 2;
+}
+std::pair<std::vector<double>, int> metoda_Powella(std::vector<double> x_0, double w, int a, int N_max, double e = 1e-5)
+{
+    int n = x_0.size();
+    int i = 0;
+    std::vector<std::vector<double>> d(n, std::vector<double>(n, 0.0));
+    for (int j = 0; j < n; ++j) d[j][j] = 1.0; // Pocz¹tkowe kierunki jednostkowe
+
+    std::vector<double> x = x_0; // Aktualny punkt
+    std::vector<double> p0 = x; // Punkt pocz¹tkowy dla ka¿dej iteracji
+    int f_calls = 0;
+
+    while (f_calls <= N_max) {
+        p0 = x; // Zapisanie punktu pocz¹tkowego
+
+        // Optymalizacja wzd³u¿ ka¿dego kierunku
+        for (int j = 0; j < n; ++j) {
+            std::function<double(double)> f_line = [&](double h) {
+                std::vector<double> x_new = x;
+                for (int k = 0; k < n; ++k) {
+                    x_new[k] += h * d[j][k];
+                }
+                f_calls++; // Zwiêkszenie liczby wywo³añ funkcji celu
+                return problem_jednokryterialny(x_new[0], x_new[1], w, a);
+                };
+
+            double h_opt = zloty_podzial(f_line, -10, 10, e); // Znalezienie optymalnej wartoœci h
+            for (int k = 0; k < n; ++k) {
+                x[k] += h_opt * d[j][k];
+            }
+        }
+
+        // Sprawdzenie kryterium stopu
+        double distance = 0.0;
+        for (int k = 0; k < n; ++k) {
+            distance += std::pow(x[k] - p0[k], 2);
+        }
+        distance = std::sqrt(distance);
+        if (distance < e) {
+            return { x, f_calls }; // Zwracamy zarówno optymalny punkt, jak i liczbê wywo³añ funkcji celu
+        }
+
+        // Wyznaczenie nowego kierunku
+        std::vector<double> d_new(n);
+        for (int k = 0; k < n; ++k) {
+            d_new[k] = x[k] - p0[k];
+        }
+
+        // Optymalizacja w nowym kierunku
+        std::function<double(double)> f_line = [&](double h) {
+            std::vector<double> x_new = x;
+            for (int k = 0; k < n; ++k) {
+                x_new[k] += h * d_new[k];
+            }
+            f_calls++; // Zwiêkszenie liczby wywo³añ funkcji celu
+            return problem_jednokryterialny(x_new[0], x_new[1], w, a);
+            };
+
+        double h_opt = zloty_podzial(f_line, -10, 10, e);
+        for (int k = 0; k < n; ++k) {
+            x[k] += h_opt * d_new[k];
+        }
+
+        // Aktualizacja kierunków
+        for (int j = 0; j < n - 1; ++j) {
+            d[j] = d[j + 1];
+        }
+        d[n - 1] = d_new;
+
+        ++i;
+    }
+
+    throw std::runtime_error("Przekroczono maksymaln¹ liczbê wywo³añ funkcji celu.");
+}
+
+void funkcja_testowa()
+{
+    double e = 1e-5;
+    int N_max = 10000;
+    std::vector<double> a = { 1, 10, 100 };
+
+    std::ofstream results1("optimization_results_1.csv");
+    results1 << "a;w;x1_0;x2_0;x1;x2;f1;f2;f_calls\n";
+    std::ofstream results2("optimization_results_2.csv");
+    results2 << "a;w;x1_0;x2_0;x1;x2;f1;f2;f_calls\n";
+    std::ofstream results3("optimization_results_3.csv");
+    results3 << "a;w;x1_0;x2_0;x1;x2;f1;f2;f_calls\n";
+
+    for (int i = 0; i < 101; i++)
+    {
+        std::vector<double> x_0 = randomStartingPoint();
+        double w = i * 0.01;
+        for (double a : a)
+        {
+            auto wynik = metoda_Powella(x_0, w, a, N_max);
+            std::vector<double> x_opt = wynik.first;
+            int f_calls = wynik.second;
+            double f1_val = f1(x_opt[0], x_opt[1], a);
+            double f2_val = f2(x_opt[0], x_opt[1], a);
+
+            if (a == 1) results1 << a << ";" << w << ";" << x_0[0] << ";" << x_0[1] << ";" << x_opt[0] << ";" << x_opt[1] << ";" << f1_val << ";" << f2_val << ";" << f_calls << "\n";
+            else if (a == 10) results2 << a << ";" << w << ";" << x_0[0] << ";" << x_0[1] << ";" << x_opt[0] << ";" << x_opt[1] << ";" << f1_val << ";" << f2_val << ";" << f_calls << "\n";
+            else if (a == 100) results3 << a << ";" << w << ";" << x_0[0] << ";" << x_0[1] << ";" << x_opt[0] << ";" << x_opt[1] << ";" << f1_val << ";" << f2_val << ";" << f_calls << "\n";
+        }
+    }
+    results1.close();
+    results2.close();
+    results3.close();
+    std::cout << "Optimization complete. Results saved\n";
+}
